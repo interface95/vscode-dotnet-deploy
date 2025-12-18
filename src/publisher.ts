@@ -1,6 +1,22 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import {
+    isCrossCompileNeeded,
+    getCrossCompileTarget,
+} from './crossCompile/types';
+import {
+    detectToolchain,
+    checkMissingTools,
+} from './crossCompile/toolchain';
+import {
+    getLinuxCrossCompileArgs,
+    getOrCreateZigWrapper,
+} from './crossCompile/zigWrapper';
+import {
+    getWindowsCrossCompileArgs,
+    getWindowsCrossCompileEnv,
+} from './crossCompile/xwinSetup';
 
 export interface PublishOptions {
     projectPath: string;
@@ -15,6 +31,8 @@ export interface PublishOptions {
     invariantGlobalization?: boolean;
     upxEnabled?: boolean;
     upxLevel?: string;
+    /** 是否启用交叉编译 (默认 true) */
+    crossCompileEnabled?: boolean;
 }
 
 export interface PublishResult {
@@ -22,6 +40,8 @@ export interface PublishResult {
     outputPath: string;
     assemblyName: string;
     error?: string;
+    /** 交叉编译警告信息 */
+    crossCompileWarning?: string;
 }
 
 /**
@@ -43,6 +63,38 @@ export async function publish(
         '-r', options.runtime,
     ];
 
+    // 检查是否需要交叉编译
+    const needsCrossCompile = isCrossCompileNeeded(options.runtime);
+    const crossCompileEnabled = options.crossCompileEnabled !== false;
+    let crossCompileWarning: string | undefined;
+    let extraEnv: Record<string, string> = {};
+
+    if (needsCrossCompile && crossCompileEnabled && options.publishAot) {
+        outputChannel.appendLine(`[Publisher] Cross-compilation detected: ${process.platform} → ${options.runtime}`);
+
+        // 检查缺失的工具
+        const missingTools = await checkMissingTools(options.runtime);
+        if (missingTools.length > 0) {
+            crossCompileWarning = `Missing tools for cross-compilation: ${missingTools.join(', ')}`;
+            outputChannel.appendLine(`[Publisher] ⚠️ ${crossCompileWarning}`);
+            outputChannel.appendLine(`[Publisher] Cross-compilation will be attempted but may fail.`);
+        }
+
+        // 获取交叉编译参数
+        const crossCompileResult = await prepareCrossCompileArgs(options.runtime, options.stripSymbols || false, outputChannel);
+
+        if (crossCompileResult.success) {
+            args.push(...crossCompileResult.args);
+            if (crossCompileResult.env) {
+                extraEnv = crossCompileResult.env;
+            }
+            outputChannel.appendLine(`[Publisher] Cross-compile args: ${crossCompileResult.args.join(' ')}`);
+        } else if (crossCompileResult.error) {
+            crossCompileWarning = crossCompileResult.error;
+            outputChannel.appendLine(`[Publisher] ⚠️ Cross-compile setup failed: ${crossCompileResult.error}`);
+        }
+    }
+
     if (options.selfContained) {
         args.push('--self-contained=true');
     }
@@ -63,7 +115,10 @@ export async function publish(
     if (options.publishAot) {
         args.push('-p:PublishAot=true');
         // AOT implies strip symbols and size optimization often, but we can be explicit
-        args.push('-p:StripSymbols=true');
+        // 对于交叉编译，StripSymbols 可能已在交叉编译参数中处理
+        if (!needsCrossCompile || !crossCompileEnabled) {
+            args.push('-p:StripSymbols=true');
+        }
         args.push('-p:IlcOptimizationPreference=Size');
     } else if (options.stripSymbols) {
         args.push('-p:StripSymbols=true');
@@ -77,27 +132,31 @@ export async function publish(
     outputChannel.appendLine('');
 
     return new Promise((resolve) => {
-        const process = spawn('dotnet', args, {
+        // 合并环境变量
+        const processEnv = { ...process.env, ...extraEnv };
+
+        const proc = spawn('dotnet', args, {
             cwd: projectDir,
-            shell: true
+            shell: true,
+            env: processEnv,
         });
 
         let stdout = '';
         let stderr = '';
 
-        process.stdout.on('data', (data) => {
+        proc.stdout.on('data', (data) => {
             const text = data.toString();
             stdout += text;
             outputChannel.append(text);
         });
 
-        process.stderr.on('data', (data) => {
+        proc.stderr.on('data', (data) => {
             const text = data.toString();
             stderr += text;
             outputChannel.append(text);
         });
 
-        process.on('close', async (code) => {
+        proc.on('close', async (code) => {
             if (code === 0) {
                 outputChannel.appendLine('');
                 outputChannel.appendLine(`[Publisher] ✓ Published successfully to ${publishDir}`);
@@ -110,7 +169,8 @@ export async function publish(
                 resolve({
                     success: true,
                     outputPath: publishDir,
-                    assemblyName: projectName
+                    assemblyName: projectName,
+                    crossCompileWarning,
                 });
             } else {
                 outputChannel.appendLine('');
@@ -119,21 +179,62 @@ export async function publish(
                     success: false,
                     outputPath: publishDir,
                     assemblyName: projectName,
-                    error: stderr || stdout
+                    error: stderr || stdout,
+                    crossCompileWarning,
                 });
             }
         });
 
-        process.on('error', (err) => {
+        proc.on('error', (err) => {
             outputChannel.appendLine(`[Publisher] ✗ Error: ${err.message}`);
             resolve({
                 success: false,
                 outputPath: publishDir,
                 assemblyName: projectName,
-                error: err.message
+                error: err.message,
+                crossCompileWarning,
             });
         });
     });
+}
+
+/**
+ * 准备交叉编译参数
+ */
+async function prepareCrossCompileArgs(
+    runtime: string,
+    stripSymbols: boolean,
+    outputChannel: vscode.OutputChannel
+): Promise<{ success: boolean; args: string[]; env?: Record<string, string>; error?: string }> {
+    const target = getCrossCompileTarget(runtime);
+
+    if (target === 'linux') {
+        // Linux 交叉编译使用 Zig
+        outputChannel.appendLine('[Publisher] Using Zig for Linux cross-compilation');
+
+        try {
+            const args = getLinuxCrossCompileArgs(runtime, stripSymbols);
+            return { success: true, args };
+        } catch (err: any) {
+            return { success: false, args: [], error: err.message };
+        }
+    }
+
+    if (target === 'windows') {
+        // Windows 交叉编译使用 lld-link + xwin
+        outputChannel.appendLine('[Publisher] Using lld-link + xwin for Windows cross-compilation');
+
+        const result = await getWindowsCrossCompileArgs(runtime);
+        if (result.success) {
+            const env = getWindowsCrossCompileEnv();
+            return { success: true, args: result.args, env };
+        } else {
+            return { success: false, args: [], error: result.error };
+        }
+    }
+
+    // 其他目标不需要特殊处理
+    return { success: true, args: [] };
 }
 
 async function compressWithUpx(dir: string, projectName: string, level: string, outputChannel: vscode.OutputChannel) {
