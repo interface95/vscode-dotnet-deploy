@@ -273,9 +273,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 body { padding: 16px; font-size: 13px; }
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .header h2 { font-size: 13px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 6px; }
-.section { margin-bottom: 4px; }
+.section { margin-bottom: 12px; }
 .section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; opacity: 0.8; margin-bottom: 8px; letter-spacing: 0.5px; }
-.form-row { margin-bottom: 4px; }
+.form-row { margin-bottom: 8px; }
 .form-label { display: block; font-size: 11px; margin-bottom: 2px; opacity: 0.9; }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .hidden { display: none; }
@@ -316,12 +316,12 @@ body { padding: 16px; font-size: 13px; }
 }
 
 /* Toolkit Overrides for better spacing */
-vscode-panel-view { padding: 4px 0; width: 100%; }
-vscode-checkbox { margin-bottom: 6px; display: flex; align-items: center; min-height: 24px; }
-vscode-radio { margin-right: 12px; display: flex; align-items: center; margin-bottom: 0; }
-vscode-radio-group { display: flex; flex-direction: row; margin-bottom: 4px; align-items: center; min-height: 24px; }
-vscode-divider { opacity: 0.4; margin: 16px 0; }
-vscode-text-field, vscode-dropdown { width: 100%; display: block; margin-bottom: 4px; box-sizing: border-box; }
+vscode-panel-view { padding: 8px 0; width: 100%; }
+vscode-checkbox { margin-bottom: 8px; display: flex; align-items: center; min-height: 24px; }
+vscode-radio { margin-right: 16px; display: flex; align-items: center; margin-bottom: 0; }
+vscode-radio-group { display: flex; flex-direction: row; margin-bottom: 8px; align-items: center; min-height: 24px; }
+vscode-divider { opacity: 0.4; margin: 20px 0; }
+vscode-text-field, vscode-dropdown { width: 100%; display: block; margin-bottom: 8px; box-sizing: border-box; }
 vscode-dropdown::part(control) { width: 100%; }
 
 /* Segmented Control */
@@ -450,9 +450,7 @@ html += '<div style="display:flex; flex-direction:column; width:100%">';
 
             html += '<div class="form-row' + showPass + '" id="passInput"><label class="form-label">密码</label><vscode-text-field id="password" type="password" value="' + (config.password || '') + '" oninput="saveState(this)"></vscode-text-field></div>';
             html += '<div class="form-row"><label class="form-label">远程路径</label><vscode-text-field id="remotePath" value="' + (config.remotePath || '/opt/apps') + '" oninput="saveState(this)"></vscode-text-field></div>';
-            html += '<div class="form-row" style="margin-top:8px;">';
-            html += '<vscode-checkbox id="incrementalUpload" checked onchange="saveCheckbox(this)">增量上传 (仅上传有变化的文件)</vscode-checkbox>';
-            html += '</div>';
+            html += '<vscode-checkbox id="incrementalUpload" checked onchange="saveCheckbox(this)" style="margin-top:4px;">增量上传 (仅上传有变化的文件)</vscode-checkbox>';
 html += '</div>';
             html += '</vscode-panel-view>';
             html += '</vscode-panels>';
@@ -461,9 +459,7 @@ html += '</div>';
 
             html += '<div class="section"><div class="section-title">⚙️ 选项</div>';
 
-            html += '<div class="form-row">';
             html += '<vscode-checkbox id="cleanDestination" onchange="saveOptions()">清空输出目录 (Clean Output)</vscode-checkbox>';
-            html += '</div>';
 
             html += '<div class="segmented-control">';
             html += '<div class="segment-btn' + (mode === 'simple' ? ' active' : '') + '" id="seg-simple" onclick="toggleMode(\\'simple\\')">简易发布</div>';
