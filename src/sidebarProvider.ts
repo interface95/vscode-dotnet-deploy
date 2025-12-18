@@ -270,27 +270,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 <script type="module" src="${toolkitUri}"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { padding: 16px; font-size: 13px; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+body { padding: 12px; font-size: 13px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .header h2 { font-size: 13px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 6px; }
-.section { margin-bottom: 12px; }
-.section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; opacity: 0.8; margin-bottom: 8px; letter-spacing: 0.5px; }
-.form-row { margin-bottom: 8px; }
+.section { margin-bottom: 10px; }
+.section-title { font-size: 10px; font-weight: 600; text-transform: uppercase; opacity: 0.8; margin-bottom: 6px; letter-spacing: 0.5px; }
+.form-row { margin-bottom: 6px; }
 .form-label { display: block; font-size: 11px; margin-bottom: 2px; opacity: 0.9; }
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .hidden { display: none; }
-.loading { text-align: center; padding: 40px; opacity: 0.6; font-style: italic; }
+.loading { text-align: center; padding: 30px; opacity: 0.6; font-style: italic; }
 
 /* Custom Progress Bar */
-.progress-container { display: none; margin-bottom: 24px; gap: 6px; }
+.progress-container { display: none; margin-bottom: 12px; gap: 4px; }
 .progress-container.visible { display: flex; }
-.progress-step { flex: 1; height: 18px; line-height: 18px; text-align: center; font-size: 10px; color: var(--vscode-descriptionForeground); background: var(--vscode-progressBar-background); opacity: 0.3; border-radius: 9px; transition: all 0.3s; position: relative; overflow: hidden; }
+.progress-step { flex: 1; height: 16px; line-height: 16px; text-align: center; font-size: 9px; color: var(--vscode-descriptionForeground); background: var(--vscode-progressBar-background); opacity: 0.3; border-radius: 8px; transition: all 0.3s; position: relative; overflow: hidden; }
 .progress-step.active { opacity: 1; color: #fff; font-weight: 600; }
 .progress-step.done { background: var(--vscode-testing-iconPassed); opacity: 1; color: #fff; }
 
 .cmd-preview-container {
-    margin-top: 24px;
-    padding: 12px;
+    margin-top: 12px;
+    padding: 8px;
     background: var(--vscode-editor-background);
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
@@ -298,35 +298,35 @@ body { padding: 16px; font-size: 13px; }
 }
 .cmd-preview {
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 11px;
+    font-size: 10px;
     color: var(--vscode-textPreformat-foreground);
     word-break: break-all;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 .cmd-preview-label {
     position: absolute;
-    top: -10px;
-    left: 8px;
+    top: -8px;
+    left: 6px;
     background: var(--vscode-sideBar-background);
-    padding: 0 6px;
-    font-size: 10px;
+    padding: 0 4px;
+    font-size: 9px;
     font-weight: 600;
     color: var(--vscode-descriptionForeground);
     border-radius: 2px;
 }
 
-/* Toolkit Overrides for better spacing */
-vscode-panel-view { padding: 8px 0; width: 100%; }
-vscode-checkbox { margin-bottom: 8px; display: flex; align-items: center; min-height: 24px; }
-vscode-radio { margin-right: 16px; display: flex; align-items: center; margin-bottom: 0; }
-vscode-radio-group { display: flex; flex-direction: row; margin-bottom: 8px; align-items: center; min-height: 24px; }
-vscode-divider { opacity: 0.4; margin: 20px 0; }
-vscode-text-field, vscode-dropdown { width: 100%; display: block; margin-bottom: 8px; box-sizing: border-box; }
+/* Toolkit Overrides for compact spacing */
+vscode-panel-view { padding: 6px 0; width: 100%; }
+vscode-checkbox { margin-bottom: 4px; display: flex; align-items: center; min-height: 22px; }
+vscode-radio { margin-right: 12px; display: flex; align-items: center; margin-bottom: 0; }
+vscode-radio-group { display: flex; flex-direction: row; margin-bottom: 4px; align-items: center; min-height: 22px; }
+vscode-divider { opacity: 0.4; margin: 12px 0; }
+vscode-text-field, vscode-dropdown { width: 100%; display: block; margin-bottom: 6px; box-sizing: border-box; }
 vscode-dropdown::part(control) { width: 100%; }
 
 /* Segmented Control */
-.segmented-control { display: flex; background: var(--vscode-input-background); padding: 2px; border-radius: 4px; margin-bottom: 16px; border: 1px solid var(--vscode-input-border); }
-.segment-btn { flex: 1; text-align: center; padding: 6px; font-size: 11px; cursor: pointer; color: var(--vscode-foreground); border-radius: 2px; user-select: none; }
+.segmented-control { display: flex; background: var(--vscode-input-background); padding: 2px; border-radius: 4px; margin-bottom: 10px; border: 1px solid var(--vscode-input-border); }
+.segment-btn { flex: 1; text-align: center; padding: 4px; font-size: 11px; cursor: pointer; color: var(--vscode-foreground); border-radius: 2px; user-select: none; }
 .segment-btn.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 600; }
 .segment-btn:hover:not(.active) { background: var(--vscode-toolbar-hoverBackground); }
 </style>
@@ -455,7 +455,7 @@ html += '</div>';
             html += '</vscode-panel-view>';
             html += '</vscode-panels>';
 
-            html += '<vscode-divider style="margin: 16px 0"></vscode-divider>';
+            html += '<vscode-divider style="margin: 10px 0"></vscode-divider>';
 
             html += '<div class="section"><div class="section-title">⚙️ 选项</div>';
 
@@ -472,9 +472,9 @@ html += '</div>';
             // Simple Mode View
             html += '<div id="view-simple" class="' + (mode === 'simple' ? '' : 'hidden') + '">';
             html += '<vscode-radio-group id="simpleMode" orientation="vertical" onchange="updateSimpleMode()" style="flex-direction: column; align-items: flex-start;">';
-            html += '<vscode-radio value="standard" style="margin-bottom: 8px;">常规发布 (Standard)</vscode-radio>';
-            html += '<vscode-radio value="singleFile" checked style="margin-bottom: 8px;">单文件 (Single File)</vscode-radio>';
-            html += '<vscode-radio value="aot" style="margin-bottom: 8px;">Native AOT</vscode-radio>';
+            html += '<vscode-radio value="standard" style="margin-bottom: 4px;">常规发布 (Standard)</vscode-radio>';
+            html += '<vscode-radio value="singleFile" checked style="margin-bottom: 4px;">单文件 (Single File)</vscode-radio>';
+            html += '<vscode-radio value="aot" style="margin-bottom: 4px;">Native AOT</vscode-radio>';
             html += '</vscode-radio-group>';
             html += '</div>';
 
@@ -498,7 +498,7 @@ html += '</div>';
             html += '</vscode-dropdown></div>';
 
             html += '<div class="cmd-preview-container"><span class="cmd-preview-label">命令预览</span><div id="cmdPreview" class="cmd-preview">...</div></div>';
-            html += '<vscode-button id="deployBtn" style="width:100%; margin-top:16px;">🚀 发布</vscode-button>';
+            html += '<vscode-button id="deployBtn" style="width:100%; margin-top:10px;">🚀 发布</vscode-button>';
 
             document.getElementById('content').innerHTML = html;
             document.getElementById('deployBtn').addEventListener('click', doDeploy);
