@@ -4,12 +4,23 @@ import * as fs from 'fs';
 import { findSolution, getExecutableProjects, parseProject, ProjectInfo } from './solutionParser';
 import { publish } from './publisher';
 import { deploy, executeRemote, DeployConfig } from './deployer';
+import {
+    detectToolchain,
+    getToolchainSummary,
+    installZig,
+    installLld,
+    installXwin,
+    installLlvm,
+} from './crossCompile/toolchain';
+import { downloadWindowsSdk } from './crossCompile/xwinSetup';
+import { isCrossCompileNeeded, getCrossCompileTarget, ToolchainStatus } from './crossCompile/types';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'dotnetDeploy.sidebar';
     private _view?: vscode.WebviewView;
     private _outputChannel: vscode.OutputChannel;
     private _projects: ProjectInfo[] = [];
+    private _toolchainStatus?: ToolchainStatus;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -59,6 +70,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                             vscode.env.clipboard.writeText('ssh-keygen -t rsa -b 4096');
                         }
                     });
+                    break;
+                case 'checkToolchain':
+                    await this._checkAndReportToolchain();
+                    break;
+                case 'installTool':
+                    await this._handleInstallTool(message.tool);
+                    break;
+                case 'openSetupWizard':
+                    vscode.commands.executeCommand('dotnetDeploy.openSetupWizard');
+                    break;
+                case 'openCrossCompileDocs':
+                    vscode.commands.executeCommand('dotnetDeploy.openCrossCompileDocs');
                     break;
             }
         });
@@ -122,6 +145,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             this._projects = projects;
             const config = vscode.workspace.getConfiguration('dotnetDeploy');
 
+            // 检测交叉编译工具链状态
+            this._toolchainStatus = await detectToolchain();
+            const toolchainSummary = getToolchainSummary(this._toolchainStatus);
+
             this._postMessage({
                 command: 'projects',
                 projects: this._projects.map(p => ({ name: p.name, path: p.path })),
@@ -137,7 +164,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     publishAot: config.get('publish.aot', false),
                     stripSymbols: config.get('publish.stripSymbols', false),
                     invariantGlobalization: config.get('publish.invariantGlobalization', false),
-                    runtime: config.get<string>('publish.runtime') || 'linux-x64'
+                    runtime: config.get<string>('publish.runtime') || 'linux-x64',
+                    crossCompileEnabled: config.get('crossCompile.enabled', true)
+                },
+                toolchain: {
+                    linuxReady: toolchainSummary.linuxReady,
+                    windowsReady: toolchainSummary.windowsReady,
+                    linuxMissing: toolchainSummary.linuxMissing,
+                    windowsMissing: toolchainSummary.windowsMissing,
+                    zig: this._toolchainStatus.zig,
+                    lld: this._toolchainStatus.lld,
+                    xwin: this._toolchainStatus.xwin,
+                    windowsSdk: this._toolchainStatus.windowsSdk,
+                    llvm: this._toolchainStatus.llvm
                 }
             });
         } catch (err: any) {
@@ -249,6 +288,87 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    /**
+     * 检查并报告工具链状态
+     */
+    private async _checkAndReportToolchain() {
+        this._outputChannel.appendLine('[Toolchain] Checking cross-compile toolchain...');
+
+        this._toolchainStatus = await detectToolchain();
+        const summary = getToolchainSummary(this._toolchainStatus);
+
+        this._outputChannel.appendLine(`[Toolchain] Zig: ${this._toolchainStatus.zig.installed ? '✓ ' + this._toolchainStatus.zig.version : '✗ Not installed'}`);
+        this._outputChannel.appendLine(`[Toolchain] LLD: ${this._toolchainStatus.lld.installed ? '✓ ' + this._toolchainStatus.lld.version : '✗ Not installed'}`);
+        this._outputChannel.appendLine(`[Toolchain] xwin: ${this._toolchainStatus.xwin.installed ? '✓ ' + this._toolchainStatus.xwin.version : '✗ Not installed'}`);
+        this._outputChannel.appendLine(`[Toolchain] Windows SDK: ${this._toolchainStatus.windowsSdk.installed ? '✓ ' + (this._toolchainStatus.windowsSdk.size || '') : '✗ Not downloaded'}`);
+        this._outputChannel.appendLine(`[Toolchain] LLVM objcopy: ${this._toolchainStatus.llvm.hasObjcopy ? '✓' : '✗ Not installed'}`);
+
+        this._outputChannel.appendLine(`[Toolchain] Linux cross-compile: ${summary.linuxReady ? '✓ Ready' : '✗ Missing: ' + summary.linuxMissing.join(', ')}`);
+        this._outputChannel.appendLine(`[Toolchain] Windows cross-compile: ${summary.windowsReady ? '✓ Ready' : '✗ Missing: ' + summary.windowsMissing.join(', ')}`);
+
+        this._postMessage({
+            command: 'toolchainStatus',
+            toolchain: {
+                linuxReady: summary.linuxReady,
+                windowsReady: summary.windowsReady,
+                linuxMissing: summary.linuxMissing,
+                windowsMissing: summary.windowsMissing,
+                zig: this._toolchainStatus.zig,
+                lld: this._toolchainStatus.lld,
+                xwin: this._toolchainStatus.xwin,
+                windowsSdk: this._toolchainStatus.windowsSdk,
+                llvm: this._toolchainStatus.llvm
+            }
+        });
+    }
+
+    /**
+     * 处理工具安装请求
+     */
+    private async _handleInstallTool(tool: string) {
+        this._outputChannel.clear();
+        this._outputChannel.show(true);
+
+        let result;
+
+        switch (tool) {
+            case 'zig':
+                this._outputChannel.appendLine('[Install] Installing Zig...');
+                result = await installZig(this._outputChannel);
+                break;
+            case 'lld':
+                this._outputChannel.appendLine('[Install] Installing LLD...');
+                result = await installLld(this._outputChannel);
+                break;
+            case 'xwin':
+                this._outputChannel.appendLine('[Install] Installing xwin...');
+                result = await installXwin(this._outputChannel);
+                break;
+            case 'llvm':
+                this._outputChannel.appendLine('[Install] Installing LLVM...');
+                result = await installLlvm(this._outputChannel);
+                break;
+            case 'windowsSdk':
+                this._outputChannel.appendLine('[Install] Downloading Windows SDK...');
+                const sdkResult = await downloadWindowsSdk(this._outputChannel);
+                result = { success: sdkResult.success, error: sdkResult.error, tool: 'windowsSdk' as const };
+                break;
+            default:
+                this._postMessage({ command: 'error', message: `未知工具: ${tool}` });
+                return;
+        }
+
+        if (result.success) {
+            this._outputChannel.appendLine(`[Install] ✓ ${tool} installed successfully`);
+            vscode.window.showInformationMessage(`✓ ${tool} 安装成功`);
+            // 刷新工具链状态
+            await this._checkAndReportToolchain();
+        } else {
+            this._outputChannel.appendLine(`[Install] ✗ Failed to install ${tool}: ${result.error}`);
+            this._postMessage({ command: 'error', message: `安装失败: ${result.error}` });
+        }
+    }
+
     private _postMessage(message: any) {
         if (this._view) {
             this._view.webview.postMessage(message);
@@ -329,6 +449,46 @@ vscode-dropdown::part(control) { width: 100%; }
 .segment-btn { flex: 1; text-align: center; padding: 4px; font-size: 11px; cursor: pointer; color: var(--vscode-foreground); border-radius: 2px; user-select: none; }
 .segment-btn.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 600; }
 .segment-btn:hover:not(.active) { background: var(--vscode-toolbar-hoverBackground); }
+
+/* Cross-compile toolchain status */
+.toolchain-status {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    font-size: 11px;
+}
+.toolchain-status.warning {
+    border-color: var(--vscode-editorWarning-foreground);
+    background: var(--vscode-inputValidation-warningBackground);
+}
+.toolchain-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+}
+.toolchain-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.toolchain-icon { font-size: 12px; }
+.toolchain-icon.ready { color: var(--vscode-testing-iconPassed); }
+.toolchain-icon.missing { color: var(--vscode-testing-iconFailed); }
+.install-btn {
+    font-size: 10px;
+    padding: 2px 6px;
+    cursor: pointer;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    border-radius: 3px;
+}
+.install-btn:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
 </style>
 </head>
 <body>
@@ -363,11 +523,18 @@ vscode-dropdown::part(control) { width: 100%; }
         vscode.postMessage({ command: 'openDashboard' });
     });
 
+    // Store toolchain status globally
+    let toolchainData = null;
+
     window.addEventListener('message', e => {
         const m = e.data;
         if (m.command === 'projects') {
             const mergedConfig = { ...m.config, ...state };
-            renderForm(m.projects, mergedConfig, m.error);
+            toolchainData = m.toolchain;
+            renderForm(m.projects, mergedConfig, m.error, m.toolchain);
+        } else if (m.command === 'toolchainStatus') {
+            toolchainData = m.toolchain;
+            updateToolchainUI(m.toolchain);
         } else if (m.command === 'status') {
             updateStep(m.phase);
         } else if (m.command === 'success') {
@@ -390,7 +557,7 @@ vscode-dropdown::part(control) { width: 100%; }
         }
     });
 
-    function renderForm(projects, config, error) {
+    function renderForm(projects, config, error, toolchain) {
         try {
             if (error) {
                 document.getElementById('content').innerHTML = '<div class="loading">' + error + '</div>';
@@ -400,6 +567,9 @@ vscode-dropdown::part(control) { width: 100%; }
             const authType = config.authType || 'key';
             const deployTarget = config.deployTarget || 'local';
             const mode = state['optionsMode'] || 'simple';
+
+            // Store toolchain data
+            toolchainData = toolchain;
 
             let html = '<div class="section"><div class="section-title">📦 项目</div>';
             html += '<div class="form-row"><vscode-dropdown id="project" style="width:100%" onchange="saveState(this)">';
@@ -497,6 +667,9 @@ html += '</div>';
             });
             html += '</vscode-dropdown></div>';
 
+            // Cross-compile toolchain status (only show when AOT is enabled and non-native target)
+            html += '<div id="toolchainContainer"></div>';
+
             html += '<div class="cmd-preview-container"><span class="cmd-preview-label">命令预览</span><div id="cmdPreview" class="cmd-preview">...</div></div>';
             html += '<vscode-button id="deployBtn" style="width:100%; margin-top:10px;">🚀 发布</vscode-button>';
 
@@ -590,6 +763,9 @@ html += '</div>';
             setTimeout(() => {
                 window.toggleMode(mode);
                 window.toggleTarget(deployTarget);
+                if (toolchain) {
+                    updateToolchainUI(toolchain);
+                }
             }, 100);
 
         } catch (e) {
@@ -642,6 +818,11 @@ html += '</div>';
 
             const previewEl = document.getElementById('cmdPreview');
             if (previewEl) previewEl.textContent = cmd;
+
+            // Update toolchain UI when options change
+            if (toolchainData) {
+                updateToolchainUI(toolchainData);
+            }
         } catch (e) {
             console.error(e);
         }
@@ -753,12 +934,122 @@ html += '</div>';
         document.getElementById('msgContainer').innerHTML = '';
     }
 
+    // Update toolchain UI based on runtime and AOT settings
+    function updateToolchainUI(toolchain) {
+        const container = document.getElementById('toolchainContainer');
+        if (!container) return;
+
+        const runtimeEl = document.getElementById('runtime');
+        const runtime = runtimeEl ? runtimeEl.value : 'linux-x64';
+        const publishAotEl = document.getElementById('publishAot');
+        const isAot = publishAotEl ? publishAotEl.checked : false;
+
+        // Only show for cross-compile scenarios with AOT
+        const isMac = navigator.platform.toLowerCase().includes('mac');
+        const isLinuxTarget = runtime.startsWith('linux-');
+        const isWinTarget = runtime.startsWith('win-');
+        const isCrossCompile = isMac && (isLinuxTarget || isWinTarget);
+
+        if (!toolchain || !isCrossCompile || !isAot) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '<div class="toolchain-status' + (!toolchain.linuxReady && isLinuxTarget || !toolchain.windowsReady && isWinTarget ? ' warning' : '') + '">';
+        html += '<div style="font-weight:600; margin-bottom:4px;">🔧 交叉编译工具链</div>';
+
+        if (isLinuxTarget) {
+            // Linux cross-compile needs Zig
+            html += '<div class="toolchain-row">';
+            html += '<div class="toolchain-label">';
+            html += '<span class="toolchain-icon ' + (toolchain.zig && toolchain.zig.installed ? 'ready' : 'missing') + '">' + (toolchain.zig && toolchain.zig.installed ? '✓' : '✗') + '</span>';
+            html += '<span>Zig</span>';
+            if (toolchain.zig && toolchain.zig.version) html += ' <span style="opacity:0.6; font-size:10px;">' + toolchain.zig.version + '</span>';
+            html += '</div>';
+            if (!toolchain.zig || !toolchain.zig.installed) {
+                html += '<button class="install-btn" onclick="installTool(\\'zig\\')">安装</button>';
+            }
+            html += '</div>';
+
+            // Optional: LLVM for symbol stripping
+            html += '<div class="toolchain-row">';
+            html += '<div class="toolchain-label">';
+            html += '<span class="toolchain-icon ' + (toolchain.llvm && toolchain.llvm.hasObjcopy ? 'ready' : 'missing') + '">' + (toolchain.llvm && toolchain.llvm.hasObjcopy ? '✓' : '○') + '</span>';
+            html += '<span>LLVM objcopy</span> <span style="opacity:0.6; font-size:10px;">(可选，用于符号剥离)</span>';
+            html += '</div>';
+            if (!toolchain.llvm || !toolchain.llvm.hasObjcopy) {
+                html += '<button class="install-btn" onclick="installTool(\\'llvm\\')">安装</button>';
+            }
+            html += '</div>';
+        }
+
+        if (isWinTarget) {
+            // Windows cross-compile needs LLD + xwin + SDK
+            html += '<div class="toolchain-row">';
+            html += '<div class="toolchain-label">';
+            html += '<span class="toolchain-icon ' + (toolchain.lld && toolchain.lld.installed ? 'ready' : 'missing') + '">' + (toolchain.lld && toolchain.lld.installed ? '✓' : '✗') + '</span>';
+            html += '<span>LLD</span>';
+            if (toolchain.lld && toolchain.lld.version) html += ' <span style="opacity:0.6; font-size:10px;">' + toolchain.lld.version.substring(0, 20) + '</span>';
+            html += '</div>';
+            if (!toolchain.lld || !toolchain.lld.installed) {
+                html += '<button class="install-btn" onclick="installTool(\\'lld\\')">安装</button>';
+            }
+            html += '</div>';
+
+            html += '<div class="toolchain-row">';
+            html += '<div class="toolchain-label">';
+            html += '<span class="toolchain-icon ' + (toolchain.xwin && toolchain.xwin.installed ? 'ready' : 'missing') + '">' + (toolchain.xwin && toolchain.xwin.installed ? '✓' : '✗') + '</span>';
+            html += '<span>xwin</span>';
+            html += '</div>';
+            if (!toolchain.xwin || !toolchain.xwin.installed) {
+                html += '<button class="install-btn" onclick="installTool(\\'xwin\\')">安装</button>';
+            }
+            html += '</div>';
+
+            html += '<div class="toolchain-row">';
+            html += '<div class="toolchain-label">';
+            html += '<span class="toolchain-icon ' + (toolchain.windowsSdk && toolchain.windowsSdk.installed ? 'ready' : 'missing') + '">' + (toolchain.windowsSdk && toolchain.windowsSdk.installed ? '✓' : '✗') + '</span>';
+            html += '<span>Windows SDK</span>';
+            if (toolchain.windowsSdk && toolchain.windowsSdk.size) html += ' <span style="opacity:0.6; font-size:10px;">' + toolchain.windowsSdk.size + '</span>';
+            html += '</div>';
+            if (!toolchain.windowsSdk || !toolchain.windowsSdk.installed) {
+                html += '<button class="install-btn" onclick="installTool(\\'windowsSdk\\')">下载</button>';
+            }
+            html += '</div>';
+        }
+
+        // 添加操作按钮
+        html += '<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--vscode-panel-border);">';
+        html += '<button class="install-btn" onclick="openSetupWizard()" style="flex:1;">🔧 配置向导</button>';
+        html += '<button class="install-btn" onclick="openCrossCompileDocs()" style="flex:1;">📖 安装教程</button>';
+        html += '</div>';
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    window.openSetupWizard = function() {
+        vscode.postMessage({ command: 'openSetupWizard' });
+    };
+
+    window.openCrossCompileDocs = function() {
+        vscode.postMessage({ command: 'openCrossCompileDocs' });
+    };
+
     window.openFolder = function(path) {
         vscode.postMessage({ command: 'openFolder', path: path });
     };
 
     window.helpSSH = function() {
         vscode.postMessage({ command: 'helpSSH' });
+    };
+
+    window.installTool = function(tool) {
+        vscode.postMessage({ command: 'installTool', tool: tool });
+    };
+
+    window.checkToolchain = function() {
+        vscode.postMessage({ command: 'checkToolchain' });
     };
 
     // Signal ready

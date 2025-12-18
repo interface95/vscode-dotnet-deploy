@@ -2,7 +2,7 @@
     "name": "vscode-dotnet-deploy",
     "displayName": "Dotnet 部署工具",
     "description": "通过 SSH 将 .NET 应用程序部署到 Ubuntu/Linux 服务器",
-    "version": "0.1.54",
+    "version": "0.1.56",
     "publisher": "local",
     "engines": {
         "vscode": "^1.85.0"
@@ -20,6 +20,16 @@
                 "command": "dotnetDeploy.openDashboard",
                 "title": "Open Advanced Dashboard",
                 "icon": "$(settings-gear)"
+            },
+            {
+                "command": "dotnetDeploy.openSetupWizard",
+                "title": "Dotnet Deploy: 配置交叉编译环境",
+                "icon": "$(tools)"
+            },
+            {
+                "command": "dotnetDeploy.openCrossCompileDocs",
+                "title": "Dotnet Deploy: 交叉编译安装教程",
+                "icon": "$(book)"
             },
             {
                 "command": "dotnetDeploy.configure",
@@ -177,6 +187,26 @@
                     "type": "string",
                     "default": "",
                     "description": "Telegram Chat ID"
+                },
+                "dotnetDeploy.crossCompile.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "启用交叉编译支持 (macOS → Linux/Windows)"
+                },
+                "dotnetDeploy.crossCompile.zigPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Zig 编译器路径 (留空则自动检测)"
+                },
+                "dotnetDeploy.crossCompile.xwinSdkPath": {
+                    "type": "string",
+                    "default": "~/.local/share/xwin-sdk",
+                    "description": "Windows SDK 缓存目录 (用于 Windows 交叉编译)"
+                },
+                "dotnetDeploy.crossCompile.autoInstallTools": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "自动安装缺失的交叉编译工具"
                 }
             }
         }
