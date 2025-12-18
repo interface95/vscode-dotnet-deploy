@@ -4,6 +4,10 @@
     "description": "通过 SSH 将 .NET 应用程序部署到 Ubuntu/Linux 服务器",
     "version": "0.1.56",
     "publisher": "local",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/interface95/vscode-dotnet-deploy.git"
+    },
     "engines": {
         "vscode": "^1.85.0"
     },
