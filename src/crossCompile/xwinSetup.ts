@@ -135,6 +135,7 @@ export async function downloadWindowsSdk(
 export async function getWindowsCrossCompileArgs(runtime: string): Promise<{
     success: boolean;
     args: string[];
+    env: Record<string, string>;
     error?: string;
 }> {
     const sdkPath = getXwinSdkPath();
@@ -143,12 +144,15 @@ export async function getWindowsCrossCompileArgs(runtime: string): Promise<{
 
     // 检查 SDK 是否存在
     const crtPath = path.join(splatPath, 'crt');
-    const sdkLibPath = path.join(splatPath, 'sdk', 'lib', 'ucrt', arch);
+    const crtLibPath = path.join(splatPath, 'crt', 'lib', arch);
+    const sdkUmPath = path.join(splatPath, 'sdk', 'lib', 'um', arch);
+    const sdkUcrtPath = path.join(splatPath, 'sdk', 'lib', 'ucrt', arch);
 
     if (!fs.existsSync(crtPath)) {
         return {
             success: false,
             args: [],
+            env: {},
             error: 'Windows SDK not found. Please download it first.',
         };
     }
@@ -159,35 +163,57 @@ export async function getWindowsCrossCompileArgs(runtime: string): Promise<{
         return {
             success: false,
             args: [],
+            env: {},
             error: 'lld-link is not installed. Please install LLD: brew install lld',
         };
     }
 
+    // 获取 lld-link 路径
+    const lldPath = await getLldLinkPath();
+
     // 构建 MSBuild 参数
     const args: string[] = [
         '-p:DisableUnsupportedError=true',
-        '-p:CppLinker=lld-link',
         '-p:AcceptVSBuildToolsLicense=true',
         // 禁用 SourceLink 以避免 lld-link 路径解析问题
         '-p:EnableSourceLink=false',
         '-p:EnableSourceControlManagerQueries=false',
     ];
 
-    // 添加链接器参数 (通过 LinkerArg)
-    // 这些参数会被传递给 lld-link
-    const linkerArgs = [
-        `/vctoolsdir:${path.join(splatPath, 'crt')}`,
-        `/winsdkdir:${path.join(splatPath, 'sdk')}`,
-        `/LIBPATH:${path.join(splatPath, 'crt', 'lib', arch)}/`,
-        `/LIBPATH:${path.join(splatPath, 'sdk', 'lib', 'um', arch)}/`,
-    ];
-
-    // 将链接器参数添加到 MSBuild
-    for (const arg of linkerArgs) {
-        args.push(`-p:LinkerArg="${arg}"`);
+    // 设置 C++ 链接器
+    if (lldPath) {
+        args.push(`-p:CppLinker=${lldPath}`);
+    } else {
+        args.push('-p:CppLinker=lld-link');
     }
 
-    return { success: true, args };
+    // 构建链接器参数 - 使用 /LIBPATH 指定库搜索路径
+    const libPaths = [
+        crtLibPath,
+        sdkUmPath,
+        sdkUcrtPath,
+    ].filter(p => fs.existsSync(p));
+
+    // 通过 IlcAdditionalLinkArgs 传递链接器参数
+    const linkerArgs = libPaths.map(p => `/LIBPATH:"${p}"`).join(' ');
+    args.push(`-p:IlcAdditionalLinkArgs=${linkerArgs}`);
+
+    // 构建 LIB 环境变量 - lld-link 需要这个来查找库
+    const libEnvPaths = libPaths.join(path.delimiter);
+
+    // 添加 lld-link 到 PATH
+    const brewPrefix = process.arch === 'arm64' ? '/opt/homebrew' : '/usr/local';
+    const lldBinPath = path.join(brewPrefix, 'opt', 'lld', 'bin');
+    const pathEnv = fs.existsSync(lldBinPath)
+        ? `${lldBinPath}:${process.env['PATH'] || ''}`
+        : process.env['PATH'] || '';
+
+    const env: Record<string, string> = {
+        'LIB': libEnvPaths,
+        'PATH': pathEnv,
+    };
+
+    return { success: true, args, env };
 }
 
 /**

@@ -226,8 +226,10 @@ async function prepareCrossCompileArgs(
 
         const result = await getWindowsCrossCompileArgs(runtime);
         if (result.success) {
-            const env = getWindowsCrossCompileEnv();
-            return { success: true, args: result.args, env };
+            // 合并环境变量
+            const baseEnv = getWindowsCrossCompileEnv();
+            const combinedEnv = { ...baseEnv, ...result.env };
+            return { success: true, args: result.args, env: combinedEnv };
         } else {
             return { success: false, args: [], error: result.error };
         }
