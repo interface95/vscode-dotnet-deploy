@@ -9,6 +9,26 @@
 - 🚀 支持 SSH 密钥或密码认证连接服务器
 - 📤 SFTP 上传发布产物
 - ▶️ 远程执行 systemd 启动命令
+- 🔧 **Native AOT 交叉编译** (macOS → Linux/Windows)
+
+## Native AOT 交叉编译
+
+插件支持从 macOS 交叉编译 Native AOT 应用到 Linux 和 Windows，无需安装 NuGet 包。
+
+### 功能特点
+- 🐧 **Linux 目标**: 自动使用 Zig 作为链接器
+- 🪟 **Windows 目标**: 自动使用 LLD 链接器和 Windows SDK
+- 🛠️ **工具链管理**: 提供可视化安装向导和一键安装功能
+- 📦 **零配置**: 自动检测并配置所有必要的 MSBuild 参数
+
+### 快速开始
+1. 打开侧边栏的 Dotnet Deploy
+2. 勾选 **Native AOT 编译**
+3. 选择目标运行时 (如 `linux-x64` 或 `win-x64`)
+4. 如果缺少工具链，会显示"配置向导"按钮
+5. 点击按钮按照指引安装所需工具 (Zig, LLD, xwin 等)
+
+更多详细信息请参阅 [交叉编译配置指南](CROSS_COMPILE_SETUP.md)。
 
 ## 安装
 
