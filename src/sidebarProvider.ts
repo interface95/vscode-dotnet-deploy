@@ -459,7 +459,10 @@ html += '</div>';
 
             html += '<div class="section"><div class="section-title">⚙️ 选项</div>';
 
-            html += '<vscode-checkbox id="cleanDestination" onchange="saveOptions()">清空输出目录 (Clean Output)</vscode-checkbox>';
+            // 仅在本地部署模式下显示清空输出目录选项
+            if (deployTarget === 'local') {
+                html += '<vscode-checkbox id="cleanDestination" onchange="saveOptions()">清空输出目录 (Clean Output)</vscode-checkbox>';
+            }
 
             html += '<div class="segmented-control">';
             html += '<div class="segment-btn' + (mode === 'simple' ? ' active' : '') + '" id="seg-simple" onclick="toggleMode(\\'simple\\')">简易发布</div>';
