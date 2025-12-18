@@ -1,0 +1,70 @@
+name: Release VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'v*'  # 匹配 v0.1.56, v1.0.0 等格式的 tag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # 需要写权限来创建 Release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Package extension
+        run: vsce package --allow-missing-repository
+
+      - name: Get package info
+        id: package
+        run: |
+          VSIX_FILE=$(ls *.vsix)
+          echo "vsix_file=$VSIX_FILE" >> $GITHUB_OUTPUT
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## VSCode Dotnet Deploy ${{ github.ref_name }}
+
+            ### 安装方式
+            1. 下载下方的 `.vsix` 文件
+            2. 在 VS Code 中打开命令面板 (Ctrl+Shift+P / Cmd+Shift+P)
+            3. 输入 "Install from VSIX" 并选择下载的文件
+
+            ### 更新内容
+            请查看 [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) 获取详细更新内容。
+          files: ${{ steps.package.outputs.vsix_file }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-package
+          path: "*.vsix"
+          retention-days: 30
