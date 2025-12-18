@@ -9,5 +9,14 @@
 
 export * from './toolchain';
 export * from './zigWrapper';
-export * from './xwinSetup';
+export {
+    getDefaultXwinSdkPath,
+    getXwinSdkPath,
+    downloadWindowsSdk,
+    getWindowsCrossCompileArgs,
+    validateWindowsSdk,
+    getLldLinkPath,
+    getWindowsCrossCompileEnv,
+    cleanWindowsSdkCache,
+} from './xwinSetup';
 export * from './types';

@@ -81,7 +81,7 @@ export async function publish(
         }
 
         // 获取交叉编译参数
-        const crossCompileResult = await prepareCrossCompileArgs(options.runtime, options.stripSymbols || false, outputChannel);
+        const crossCompileResult = await prepareCrossCompileArgs(options.runtime, options.stripSymbols || false, outputChannel, projectDir);
 
         if (crossCompileResult.success) {
             args.push(...crossCompileResult.args);
@@ -204,7 +204,8 @@ export async function publish(
 async function prepareCrossCompileArgs(
     runtime: string,
     stripSymbols: boolean,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.OutputChannel,
+    projectDir: string
 ): Promise<{ success: boolean; args: string[]; env?: Record<string, string>; error?: string }> {
     const target = getCrossCompileTarget(runtime);
 
@@ -229,6 +230,13 @@ async function prepareCrossCompileArgs(
             // 合并环境变量
             const baseEnv = getWindowsCrossCompileEnv();
             const combinedEnv = { ...baseEnv, ...result.env };
+
+            outputChannel.appendLine(`[Publisher] LIB env: ${combinedEnv['LIB'] || 'not set'}`);
+
+            // 先尝试只使用环境变量，不创建临时文件
+            // lld-link 应该能读取 LIB 环境变量（使用分号分隔）
+            // 如果失败，用户可以手动创建 Directory.Build.props 文件
+
             return { success: true, args: result.args, env: combinedEnv };
         } else {
             return { success: false, args: [], error: result.error };
