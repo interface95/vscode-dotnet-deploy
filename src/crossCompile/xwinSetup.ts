@@ -195,8 +195,9 @@ export async function getWindowsCrossCompileArgs(runtime: string): Promise<{
     ].filter(p => fs.existsSync(p));
 
     // 通过 IlcAdditionalLinkArgs 传递链接器参数
-    const linkerArgs = libPaths.map(p => `/LIBPATH:"${p}"`).join(' ');
-    args.push(`-p:IlcAdditionalLinkArgs=${linkerArgs}`);
+    // 使用分号分隔多个参数，避免空格被 MSBuild 误解
+    const linkerArgs = libPaths.map(p => `/LIBPATH:${p}`).join(';');
+    args.push(`-p:IlcAdditionalLinkArgs="${linkerArgs}"`);
 
     // 构建 LIB 环境变量 - lld-link 需要这个来查找库
     const libEnvPaths = libPaths.join(path.delimiter);
