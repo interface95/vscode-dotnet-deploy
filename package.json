@@ -1,0 +1,202 @@
+{
+    "name": "vscode-dotnet-deploy",
+    "displayName": "Dotnet 部署工具",
+    "description": "通过 SSH 将 .NET 应用程序部署到 Ubuntu/Linux 服务器",
+    "version": "0.1.50",
+    "publisher": "local",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onView:dotnetDeploy.sidebar"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "dotnetDeploy.openDashboard",
+                "title": "Open Advanced Dashboard",
+                "icon": "$(settings-gear)"
+            },
+            {
+                "command": "dotnetDeploy.configure",
+                "title": "Dotnet Deploy: Configure Settings",
+                "icon": "$(gear)"
+            },
+            {
+                "command": "dotnetDeploy.refresh",
+                "title": "Refresh Projects",
+                "icon": "$(refresh)"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "dotnetDeploy",
+                    "title": "Dotnet Deploy",
+                    "icon": "resources/deploy.svg"
+                }
+            ]
+        },
+        "views": {
+            "dotnetDeploy": [
+                {
+                    "type": "webview",
+                    "id": "dotnetDeploy.sidebar",
+                    "name": "Deploy"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "dotnetDeploy.configure",
+                    "when": "view == dotnetDeploy.sidebar",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "configuration": {
+            "title": "Dotnet 部署工具",
+            "properties": {
+                "dotnetDeploy.server.host": {
+                    "type": "string",
+                    "default": "",
+                    "description": "SSH 服务器主机名或 IP"
+                },
+                "dotnetDeploy.server.port": {
+                    "type": "number",
+                    "default": 22,
+                    "description": "SSH 端口"
+                },
+                "dotnetDeploy.server.username": {
+                    "type": "string",
+                    "default": "root",
+                    "description": "SSH 用户名"
+                },
+                "dotnetDeploy.server.privateKeyPath": {
+                    "type": "string",
+                    "default": "~/.ssh/id_rsa",
+                    "description": "SSH 私钥路径"
+                },
+                "dotnetDeploy.deploy.remotePath": {
+                    "type": "string",
+                    "default": "/opt/apps",
+                    "description": "远程部署目录"
+                },
+                "dotnetDeploy.deploy.afterUploadCommand": {
+                    "type": "string",
+                    "default": "sudo {remote_path}/{app_name} start",
+                    "description": "文件上传后执行的远程命令 (支持变量: {app_name}, {remote_path})",
+                    "editPresentation": "multilineText"
+                },
+                "dotnetDeploy.publish.selfContained": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "独立发布 (包含运行时)"
+                },
+                "dotnetDeploy.publish.singleFile": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "发布为单文件"
+                },
+                "dotnetDeploy.publish.debugSymbols": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "包含调试符号 (.pdb 文件)"
+                },
+                "dotnetDeploy.publish.aot": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "启用 Native AOT 编译 (-p:PublishAot=true)"
+                },
+                "dotnetDeploy.publish.stripSymbols": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "剥离符号 (-p:StripSymbols=true)"
+                },
+                "dotnetDeploy.publish.trim": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "裁剪未使用的代码"
+                },
+                "dotnetDeploy.publish.invariantGlobalization": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "无全球化依赖 (-p:InvariantGlobalization=true)"
+                },
+                "dotnetDeploy.publish.runtime": {
+                    "type": "string",
+                    "default": "linux-x64",
+                    "description": "目标运行时标识符",
+                    "enum": [
+                        "linux-x64",
+                        "linux-arm64",
+                        "win-x64",
+                        "win-x86",
+                        "win-arm64",
+                        "osx-x64",
+                        "osx-arm64"
+                    ]
+                },
+                "dotnetDeploy.upx.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable UPX compression after publish"
+                },
+                "dotnetDeploy.upx.level": {
+                    "type": "string",
+                    "default": "--best",
+                    "enum": [
+                        "-1",
+                        "-9",
+                        "--best",
+                        "--lzma"
+                    ],
+                    "description": "UPX compression level"
+                },
+                "dotnetDeploy.telegram.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable Telegram notifications"
+                },
+                "dotnetDeploy.telegram.upload": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Upload build artifact to Telegram"
+                },
+                "dotnetDeploy.telegram.botToken": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Telegram Bot Token"
+                },
+                "dotnetDeploy.telegram.chatId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Telegram Chat ID"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "lint": "eslint src --ext ts"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "@types/ssh2": "^1.11.0",
+        "@types/ssh2-sftp-client": "^9.0.0",
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.3.0"
+    },
+    "dependencies": {
+        "@vscode/webview-ui-toolkit": "^1.4.0",
+        "ssh2": "^1.15.0",
+        "ssh2-sftp-client": "^10.0.0"
+    }
+}
