@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as https from 'https';
+import * as crypto from 'crypto';
 import Client from 'ssh2-sftp-client';
 import { Client as SSHClient } from 'ssh2';
 
@@ -19,6 +20,7 @@ export interface DeployConfig {
     telegramUpload?: boolean;
     telegramBotToken?: string;
     telegramChatId?: string;
+    incrementalUpload?: boolean;  // 增量上传：只上传有变化的文件
 }
 
 export interface DeployResult {
@@ -86,10 +88,38 @@ export async function deploy(
 
         // Get all files to upload
         const files = getAllFiles(localPath);
-        outputChannel.appendLine(`[Deployer] Uploading ${files.length} files...`);
+
+        // 增量上传逻辑
+        let filesToUpload: string[] = files;
+        let skipped = 0;
+
+        if (config.incrementalUpload) {
+            outputChannel.appendLine(`[Deployer] Incremental upload enabled, checking for changes...`);
+            filesToUpload = [];
+
+            for (const file of files) {
+                const relativePath = path.relative(localPath, file);
+                const remoteFilePath = path.posix.join(remoteDir, relativePath.replace(/\\/g, '/'));
+
+                const needsUpload = await shouldUploadFile(sftp, file, remoteFilePath);
+                if (needsUpload) {
+                    filesToUpload.push(file);
+                } else {
+                    skipped++;
+                }
+            }
+
+            outputChannel.appendLine(`[Deployer] Incremental: ${filesToUpload.length} files to upload, ${skipped} files unchanged`);
+        }
+
+        if (filesToUpload.length === 0) {
+            outputChannel.appendLine(`[Deployer] ✓ All files are up to date, nothing to upload`);
+        } else {
+            outputChannel.appendLine(`[Deployer] Uploading ${filesToUpload.length} files...`);
+        }
 
         let uploaded = 0;
-        for (const file of files) {
+        for (const file of filesToUpload) {
             const relativePath = path.relative(localPath, file);
             const remotePath = path.posix.join(remoteDir, relativePath.replace(/\\/g, '/'));
             const remoteFileDir = path.posix.dirname(remotePath);
@@ -106,8 +136,8 @@ export async function deploy(
             uploaded++;
 
             // Progress update every 10 files
-            if (uploaded % 10 === 0 || uploaded === files.length) {
-                outputChannel.appendLine(`[Deployer] Progress: ${uploaded}/${files.length} files`);
+            if (uploaded % 10 === 0 || uploaded === filesToUpload.length) {
+                outputChannel.appendLine(`[Deployer] Progress: ${uploaded}/${filesToUpload.length} files`);
             }
         }
 
@@ -186,6 +216,56 @@ function getAllFiles(dirPath: string, files: string[] = []): string[] {
     }
 
     return files;
+}
+
+/**
+ * Calculate MD5 hash of a file
+ */
+function calculateFileHash(filePath: string): string {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash('md5');
+    hashSum.update(fileBuffer);
+    return hashSum.digest('hex');
+}
+
+/**
+ * Check if a file needs to be uploaded by comparing size and modification time
+ * Returns true if file should be uploaded, false if it can be skipped
+ */
+async function shouldUploadFile(sftp: Client, localFile: string, remoteFile: string): Promise<boolean> {
+    try {
+        // Get local file stats
+        const localStats = fs.statSync(localFile);
+
+        // Try to get remote file stats
+        let remoteStat;
+        try {
+            remoteStat = await sftp.stat(remoteFile);
+        } catch {
+            // Remote file doesn't exist, need to upload
+            return true;
+        }
+
+        // Compare file sizes - if different, need to upload
+        if (localStats.size !== remoteStat.size) {
+            return true;
+        }
+
+        // Compare modification times - if local is newer, need to upload
+        // Remote mtime is in seconds, local is in milliseconds
+        const localMtime = Math.floor(localStats.mtimeMs / 1000);
+        const remoteMtime = remoteStat.modifyTime;
+
+        if (localMtime > remoteMtime) {
+            return true;
+        }
+
+        // Files appear to be the same
+        return false;
+    } catch {
+        // On any error, upload the file to be safe
+        return true;
+    }
 }
 
 /**

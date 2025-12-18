@@ -2,7 +2,7 @@
     "name": "vscode-dotnet-deploy",
     "displayName": "Dotnet 部署工具",
     "description": "通过 SSH 将 .NET 应用程序部署到 Ubuntu/Linux 服务器",
-    "version": "0.1.50",
+    "version": "0.1.51",
     "publisher": "local",
     "engines": {
         "vscode": "^1.85.0"

@@ -224,7 +224,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             telegramEnabled: config.get('telegram.enabled'),
             telegramUpload: config.get('telegram.upload'),
             telegramBotToken: config.get('telegram.botToken'),
-            telegramChatId: config.get('telegram.chatId')
+            telegramChatId: config.get('telegram.chatId'),
+            incrementalUpload: message.incrementalUpload
         };
 
         this._postMessage({ command: 'status', phase: 'upload' });
@@ -449,6 +450,9 @@ html += '<div style="display:flex; flex-direction:column; width:100%">';
 
             html += '<div class="form-row' + showPass + '" id="passInput"><label class="form-label">密码</label><vscode-text-field id="password" type="password" value="' + (config.password || '') + '" oninput="saveState(this)"></vscode-text-field></div>';
             html += '<div class="form-row"><label class="form-label">远程路径</label><vscode-text-field id="remotePath" value="' + (config.remotePath || '/opt/apps') + '" oninput="saveState(this)"></vscode-text-field></div>';
+            html += '<div class="form-row" style="margin-top:8px;">';
+            html += '<vscode-checkbox id="incrementalUpload" checked onchange="saveCheckbox(this)">增量上传 (仅上传有变化的文件)</vscode-checkbox>';
+            html += '</div>';
 html += '</div>';
             html += '</vscode-panel-view>';
             html += '</vscode-panels>';
@@ -456,7 +460,7 @@ html += '</div>';
             html += '<vscode-divider style="margin: 16px 0"></vscode-divider>';
 
             html += '<div class="section"><div class="section-title">⚙️ 选项</div>';
-            
+
             html += '<div class="form-row">';
             html += '<vscode-checkbox id="cleanDestination" onchange="saveOptions()">清空输出目录 (Clean Output)</vscode-checkbox>';
             html += '</div>';
@@ -692,7 +696,8 @@ html += '</div>';
             disableSymbols: isChecked('disableSymbols'),
             publishAot: isChecked('publishAot'),
             stripSymbols: isChecked('stripSymbols'),
-            invariantGlobalization: isChecked('invariantGlobalization')
+            invariantGlobalization: isChecked('invariantGlobalization'),
+            incrementalUpload: isChecked('incrementalUpload')
         });
     }
 
