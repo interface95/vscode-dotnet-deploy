@@ -20,3 +20,5 @@ export {
     cleanWindowsSdkCache,
 } from './xwinSetup';
 export * from './types';
+// Note: macosPackager is not exported here to avoid loading issues on non-macOS platforms
+// Import it directly from './crossCompile/macosPackager' when needed

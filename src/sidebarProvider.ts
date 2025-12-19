@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { findSolution, getExecutableProjects, parseProject, ProjectInfo } from './solutionParser';
-import { publish } from './publisher';
+import { publish, PublishPhase } from './publisher';
 import { deploy, executeRemote, DeployConfig } from './deployer';
 import {
     detectToolchain,
@@ -83,6 +83,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 case 'openCrossCompileDocs':
                     vscode.commands.executeCommand('dotnetDeploy.openCrossCompileDocs');
                     break;
+                case 'openMacOSPackageConfig':
+                    vscode.commands.executeCommand('dotnetDeploy.openMacOSPackageConfig');
+                    break;
             }
         });
 
@@ -145,13 +148,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             this._projects = projects;
             const config = vscode.workspace.getConfiguration('dotnetDeploy');
 
-            // 检测交叉编译工具链状态
-            this._toolchainStatus = await detectToolchain();
-            const toolchainSummary = getToolchainSummary(this._toolchainStatus);
+            // 检测是否为 macOS 平台
+            const isMacOS = process.platform === 'darwin';
 
+            // 先发送项目列表（不等待工具链检测）
             this._postMessage({
                 command: 'projects',
                 projects: this._projects.map(p => ({ name: p.name, path: p.path })),
+                isMacOS: isMacOS,
                 config: {
                     host: config.get('server.host', ''),
                     port: config.get('server.port', 22),
@@ -167,6 +171,26 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     runtime: config.get<string>('publish.runtime') || 'linux-x64',
                     crossCompileEnabled: config.get('crossCompile.enabled', true)
                 },
+                toolchain: null  // 工具链稍后异步加载
+            });
+
+            // 异步加载工具链状态（不阻塞 UI）
+            this._loadToolchainAsync();
+        } catch (err: any) {
+            this._postMessage({ command: 'projects', projects: [], error: err.message });
+        }
+    }
+
+    /**
+     * 异步加载工具链状态
+     */
+    private async _loadToolchainAsync() {
+        try {
+            this._toolchainStatus = await detectToolchain();
+            const toolchainSummary = getToolchainSummary(this._toolchainStatus);
+
+            this._postMessage({
+                command: 'toolchainStatus',
                 toolchain: {
                     linuxReady: toolchainSummary.linuxReady,
                     windowsReady: toolchainSummary.windowsReady,
@@ -180,7 +204,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 }
             });
         } catch (err: any) {
-            this._postMessage({ command: 'projects', projects: [], error: err.message });
+            console.error('Failed to detect toolchain:', err);
         }
     }
 
@@ -222,6 +246,37 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._postMessage({ command: 'status', phase: 'publish' });
         this._outputChannel.appendLine(`[Deploy] Publishing ${project.name} to ${publishDir}...`);
 
+        // 获取 UPX 配置
+        const upxConfig = vscode.workspace.getConfiguration('dotnetDeploy.upx');
+        const upxEnabled = upxConfig.get<boolean>('enabled', false);
+        const upxLevel = upxConfig.get<string>('level', '--best');
+
+        // 获取 macOS 打包配置
+        const macosConfig = vscode.workspace.getConfiguration('dotnetDeploy.macos');
+        const macosEnabled = macosConfig.get<boolean>('enabled', false);
+
+        // 状态回调 - 更新 UI 显示当前阶段
+        const onStatus = (phase: PublishPhase, statusMessage: string) => {
+            // 根据部署模式和配置决定显示哪些阶段
+            if (deployTarget === 'local') {
+                // 本地模式：编译 → [压缩] → [打包]
+                const phaseMap: Record<PublishPhase, string> = {
+                    'compile': '编译中',
+                    'upx': '压缩中',
+                    'package': '打包中'
+                };
+                const btn = this._view?.webview;
+                if (btn) {
+                    this._postMessage({
+                        command: 'localStatus',
+                        phase: phase,
+                        message: phaseMap[phase] || statusMessage
+                    });
+                }
+            }
+            // 服务器模式使用原有的 progress bar
+        };
+
         const publishResult = await publish({
             projectPath: project.path,
             outputPath: publishDir,
@@ -232,7 +287,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             publishAot: message.publishAot,
             stripSymbols: message.stripSymbols,
             invariantGlobalization: message.invariantGlobalization,
-            runtime: message.runtime
+            runtime: message.runtime,
+            upxEnabled: upxEnabled,
+            upxLevel: upxLevel,
+            onStatus: onStatus
         }, this._outputChannel);
 
         if (!publishResult.success) {
@@ -408,6 +466,13 @@ body { padding: 12px; font-size: 13px; }
 .progress-step.active { opacity: 1; color: #fff; font-weight: 600; }
 .progress-step.done { background: var(--vscode-testing-iconPassed); opacity: 1; color: #fff; }
 
+/* 本地模式进度条 */
+.local-progress { display: none; margin-bottom: 12px; gap: 4px; }
+.local-progress.visible { display: flex; }
+.local-step { flex: 1; height: 16px; line-height: 16px; text-align: center; font-size: 9px; color: var(--vscode-descriptionForeground); background: var(--vscode-progressBar-background); opacity: 0.3; border-radius: 8px; transition: all 0.3s; }
+.local-step.active { opacity: 1; color: #fff; font-weight: 600; }
+.local-step.done { background: var(--vscode-testing-iconPassed); opacity: 1; color: #fff; }
+
 .cmd-preview-container {
     margin-top: 12px;
     padding: 8px;
@@ -495,6 +560,7 @@ vscode-dropdown::part(control) { width: 100%; }
 <div class="header">
     <h2>🚀 Dotnet Deploy</h2>
     <div style="display:flex; gap:4px;">
+        <vscode-button appearance="icon" id="macosPackageBtn" title="macOS 打包" style="display:none;">📦</vscode-button>
         <vscode-button appearance="icon" id="dashboardBtn" title="高级设置">⚙️</vscode-button>
         <vscode-button appearance="icon" id="refreshBtn" title="刷新项目">↻</vscode-button>
     </div>
@@ -504,6 +570,12 @@ vscode-dropdown::part(control) { width: 100%; }
     <div class="progress-step" id="s1">发布</div>
     <div class="progress-step" id="s2">上传</div>
     <div class="progress-step" id="s3">启动</div>
+</div>
+
+<div class="local-progress" id="localProgress">
+    <div class="local-step" id="ls1">编译</div>
+    <div class="local-step" id="ls2">压缩</div>
+    <div class="local-step" id="ls3">打包</div>
 </div>
 
 <div id="content"><div class="loading">正在加载项目...</div></div>
@@ -523,14 +595,29 @@ vscode-dropdown::part(control) { width: 100%; }
         vscode.postMessage({ command: 'openDashboard' });
     });
 
+    document.getElementById('macosPackageBtn').addEventListener('click', () => {
+        vscode.postMessage({ command: 'openMacOSPackageConfig' });
+    });
+
     // Store toolchain status globally
     let toolchainData = null;
+    let isMacOSPlatform = false;
 
     window.addEventListener('message', e => {
         const m = e.data;
-        if (m.command === 'projects') {
+        if (m.command === 'localStatus') {
+            updateLocalStep(m.phase);
+        } else if (m.command === 'projects') {
             const mergedConfig = { ...m.config, ...state };
             toolchainData = m.toolchain;
+            isMacOSPlatform = m.isMacOS || false;
+
+            // Show/hide macOS package button based on platform
+            const macosBtn = document.getElementById('macosPackageBtn');
+            if (macosBtn) {
+                macosBtn.style.display = isMacOSPlatform ? 'inline-flex' : 'none';
+            }
+
             renderForm(m.projects, mergedConfig, m.error, m.toolchain);
         } else if (m.command === 'toolchainStatus') {
             toolchainData = m.toolchain;
@@ -539,6 +626,10 @@ vscode-dropdown::part(control) { width: 100%; }
             updateStep(m.phase);
         } else if (m.command === 'success') {
             completeAllSteps();
+            completeLocalSteps();
+            // 隐藏本地进度条
+            const localProgress = document.getElementById('localProgress');
+            if (localProgress) localProgress.classList.remove('visible');
             let msg = '✓ ' + m.message;
             if (m.path) {
                 // Escape backslashes for JS string literal
@@ -551,6 +642,9 @@ vscode-dropdown::part(control) { width: 100%; }
             btn.textContent = '🚀 发布';
         } else if (m.command === 'error') {
             showMsg('error', '✗ ' + m.message);
+            // 隐藏本地进度条
+            const localProgress = document.getElementById('localProgress');
+            if (localProgress) localProgress.classList.remove('visible');
             const btn = document.getElementById('deployBtn');
             btn.removeAttribute('disabled');
             btn.textContent = '🚀 发布';
@@ -701,10 +795,13 @@ html += '</div>';
 
                 // Update Progress Bar
                 const progress = document.getElementById('progress');
+                const localProgress = document.getElementById('localProgress');
                 if (target === 'local') {
                     progress.classList.remove('visible');
+                    // 本地进度条在发布时才显示
                 } else {
                     progress.classList.add('visible');
+                    if (localProgress) localProgress.classList.remove('visible');
                 }
             };
             window.updateSimpleMode = function() {
@@ -846,9 +943,14 @@ html += '</div>';
 
         if (deployTarget === 'server') {
             document.getElementById('progress').classList.add('visible');
+        } else {
+            // 本地模式显示本地进度条
+            const localProgress = document.getElementById('localProgress');
+            if (localProgress) localProgress.classList.add('visible');
         }
 
         resetSteps();
+        resetLocalSteps();
         hideMsg();
 
         const authType = document.getElementById('authType').value;
@@ -891,6 +993,35 @@ html += '</div>';
             if (i < idx) el.className = 'progress-step done';
             else if (i === idx) el.className = 'progress-step active';
             else el.className = 'progress-step';
+        }
+    }
+
+    function updateLocalStep(phase) {
+        const map = { 'compile': 1, 'upx': 2, 'package': 3 };
+        const idx = map[phase];
+        if (!idx) return;
+
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById('ls' + i);
+            if (el) {
+                if (i < idx) el.className = 'local-step done';
+                else if (i === idx) el.className = 'local-step active';
+                else el.className = 'local-step';
+            }
+        }
+    }
+
+    function completeLocalSteps() {
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById('ls' + i);
+            if (el) el.className = 'local-step done';
+        }
+    }
+
+    function resetLocalSteps() {
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById('ls' + i);
+            if (el) el.className = 'local-step';
         }
     }
 

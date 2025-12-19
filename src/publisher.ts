@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { spawn } from 'child_process';
 import {
     isCrossCompileNeeded,
@@ -17,6 +18,18 @@ import {
     getWindowsCrossCompileArgs,
     getWindowsCrossCompileEnv,
 } from './crossCompile/xwinSetup';
+import {
+    isMacOS,
+    getMacOSPackageConfig,
+    packageForMacOS,
+    MacOSPackageOptions,
+} from './crossCompile/macosPackager';
+
+/** 发布阶段 */
+export type PublishPhase = 'compile' | 'upx' | 'package';
+
+/** 状态回调函数类型 */
+export type StatusCallback = (phase: PublishPhase, message: string) => void;
 
 export interface PublishOptions {
     projectPath: string;
@@ -33,6 +46,8 @@ export interface PublishOptions {
     upxLevel?: string;
     /** 是否启用交叉编译 (默认 true) */
     crossCompileEnabled?: boolean;
+    /** 状态回调 */
+    onStatus?: StatusCallback;
 }
 
 export interface PublishResult {
@@ -131,6 +146,9 @@ export async function publish(
     outputChannel.appendLine(`[Publisher] Running: dotnet ${args.join(' ')}`);
     outputChannel.appendLine('');
 
+    // 通知状态：编译中
+    options.onStatus?.('compile', '正在编译...');
+
     return new Promise((resolve) => {
         // 合并环境变量
         const processEnv = { ...process.env, ...extraEnv };
@@ -161,14 +179,50 @@ export async function publish(
                 outputChannel.appendLine('');
                 outputChannel.appendLine(`[Publisher] ✓ Published successfully to ${publishDir}`);
 
-                // UPX Compression
-                if (options.upxEnabled) {
+                // UPX Compression (仅支持 Linux/Windows 目标)
+                const isUPXSupported = options.runtime.startsWith('linux-') || options.runtime.startsWith('win-');
+                if (options.upxEnabled && isUPXSupported) {
+                    options.onStatus?.('upx', '正在压缩...');
                     await compressWithUpx(publishDir, projectName, options.upxLevel || '--best', outputChannel);
+                } else if (options.upxEnabled && !isUPXSupported) {
+                    outputChannel.appendLine(`[UPX] ⚠️ UPX 不支持 ${options.runtime} 目标，跳过压缩`);
+                }
+
+                // macOS 打包
+                let macosPackagePath: string | undefined;
+                if (isMacOS() && options.runtime.startsWith('osx-')) {
+                    const macosConfig = getMacOSPackageConfig();
+                    if (macosConfig) {
+                        options.onStatus?.('package', '正在打包...');
+                        outputChannel.appendLine('');
+                        outputChannel.appendLine('[Publisher] Starting macOS packaging...');
+
+                        // 查找可执行文件
+                        const executablePath = findExecutable(publishDir, projectName);
+                        if (executablePath) {
+                            const packageOptions: MacOSPackageOptions = {
+                                ...macosConfig,
+                                executablePath,
+                                outputDir: publishDir,
+                                appName: macosConfig.appName || projectName,
+                            };
+
+                            const packageResult = await packageForMacOS(packageOptions, outputChannel);
+                            if (packageResult.success) {
+                                macosPackagePath = packageResult.outputPath;
+                                outputChannel.appendLine(`[Publisher] ✓ macOS package created: ${macosPackagePath}`);
+                            } else {
+                                outputChannel.appendLine(`[Publisher] ⚠️ macOS packaging failed: ${packageResult.error}`);
+                            }
+                        } else {
+                            outputChannel.appendLine(`[Publisher] ⚠️ Could not find executable for macOS packaging`);
+                        }
+                    }
                 }
 
                 resolve({
                     success: true,
-                    outputPath: publishDir,
+                    outputPath: macosPackagePath || publishDir,
                     assemblyName: projectName,
                     crossCompileWarning,
                 });
@@ -245,6 +299,25 @@ async function prepareCrossCompileArgs(
 
     // 其他目标不需要特殊处理
     return { success: true, args: [] };
+}
+
+/**
+ * 查找可执行文件
+ */
+function findExecutable(dir: string, projectName: string): string | undefined {
+    const candidates = [
+        projectName,           // macOS/Linux
+        `${projectName}.exe`,  // Windows
+    ];
+
+    for (const candidate of candidates) {
+        const filePath = path.join(dir, candidate);
+        if (fs.existsSync(filePath)) {
+            return filePath;
+        }
+    }
+
+    return undefined;
 }
 
 async function compressWithUpx(dir: string, projectName: string, level: string, outputChannel: vscode.OutputChannel) {

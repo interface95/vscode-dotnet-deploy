@@ -4,6 +4,7 @@ import * as os from 'os';
 import { SidebarProvider } from './sidebarProvider';
 import { DashboardProvider } from './dashboardProvider';
 import { SetupWizardProvider } from './setupWizardProvider';
+import { MacOSPackageConfigProvider } from './macosPackageConfigProvider';
 
 let outputChannel: vscode.OutputChannel;
 
@@ -26,6 +27,11 @@ export function activate(context: vscode.ExtensionContext) {
     const setupWizardProvider = new SetupWizardProvider(context.extensionUri, outputChannel);
     const setupWizardCommand = vscode.commands.registerCommand('dotnetDeploy.openSetupWizard', () => {
         setupWizardProvider.open();
+    });
+
+    // Register macOS package config command
+    const macosPackageConfigCommand = vscode.commands.registerCommand('dotnetDeploy.openMacOSPackageConfig', () => {
+        MacOSPackageConfigProvider.createOrShow(context.extensionUri);
     });
 
     // Register configure command
@@ -52,6 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         dashboardCommand,
         setupWizardCommand,
+        macosPackageConfigCommand,
         configureCommand,
         refreshCommand,
         openDocsCommand,
