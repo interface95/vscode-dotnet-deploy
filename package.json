@@ -2,7 +2,7 @@
     "name": "vscode-dotnet-deploy",
     "displayName": "Dotnet 部署工具",
     "description": "通过 SSH 将 .NET 应用程序部署到 Ubuntu/Linux 服务器",
-    "version": "0.1.63",
+    "version": "0.1.71",
     "publisher": "local",
     "repository": {
         "type": "git",
@@ -164,7 +164,7 @@
                 "dotnetDeploy.upx.enabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Enable UPX compression after publish"
+                    "description": "启用 UPX 压缩 (支持 Linux/Windows 目标，macOS 目标不支持)"
                 },
                 "dotnetDeploy.upx.level": {
                     "type": "string",
@@ -175,7 +175,7 @@
                         "--best",
                         "--lzma"
                     ],
-                    "description": "UPX compression level"
+                    "description": "UPX 压缩级别 (需要先安装 upx: brew install upx)"
                 },
                 "dotnetDeploy.telegram.enabled": {
                     "type": "boolean",
@@ -291,6 +291,101 @@
                     "type": "string",
                     "default": "",
                     "description": "Team ID"
+                },
+                "dotnetDeploy.macos.entitlements.appSandbox": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "启用 App Sandbox"
+                },
+                "dotnetDeploy.macos.entitlements.networkClient": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "允许出站网络连接"
+                },
+                "dotnetDeploy.macos.entitlements.networkServer": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "允许入站网络连接"
+                },
+                "dotnetDeploy.macos.entitlements.fileReadWrite": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "用户选择的文件读写权限"
+                },
+                "dotnetDeploy.macos.entitlements.downloadsReadWrite": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Downloads 文件夹读写权限"
+                },
+                "dotnetDeploy.macos.entitlements.picturesReadWrite": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Pictures 文件夹读写权限"
+                },
+                "dotnetDeploy.macos.entitlements.musicReadWrite": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Music 文件夹读写权限"
+                },
+                "dotnetDeploy.macos.entitlements.moviesReadWrite": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Movies 文件夹读写权限"
+                },
+                "dotnetDeploy.macos.entitlements.hardenedRuntime": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "启用 Hardened Runtime"
+                },
+                "dotnetDeploy.macos.entitlements.allowJit": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "允许 JIT 编译"
+                },
+                "dotnetDeploy.macos.entitlements.allowUnsignedMemory": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "允许未签名的可执行内存"
+                },
+                "dotnetDeploy.macos.entitlements.allowDyldEnv": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "允许 DYLD 环境变量"
+                },
+                "dotnetDeploy.macos.entitlements.disableLibraryValidation": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "禁用库验证"
+                },
+                "dotnetDeploy.macos.entitlements.camera": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "摄像头访问权限"
+                },
+                "dotnetDeploy.macos.entitlements.microphone": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "麦克风访问权限"
+                },
+                "dotnetDeploy.macos.entitlements.location": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "位置服务权限"
+                },
+                "dotnetDeploy.macos.entitlements.calendars": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "日历访问权限"
+                },
+                "dotnetDeploy.macos.entitlements.contacts": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "通讯录访问权限"
+                },
+                "dotnetDeploy.macos.entitlements.photos": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "照片库访问权限"
                 }
             }
         }

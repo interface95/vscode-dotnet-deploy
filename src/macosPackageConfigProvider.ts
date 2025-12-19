@@ -108,6 +108,26 @@ export class MacOSPackageConfigProvider {
                 notarize: config.get<boolean>('codeSign.notarize', false),
                 appleId: config.get<string>('codeSign.appleId', ''),
                 teamId: config.get<string>('codeSign.teamId', ''),
+                // 权限配置
+                entAppSandbox: config.get<boolean>('entitlements.appSandbox', false),
+                entNetworkClient: config.get<boolean>('entitlements.networkClient', false),
+                entNetworkServer: config.get<boolean>('entitlements.networkServer', false),
+                entFileReadWrite: config.get<boolean>('entitlements.fileReadWrite', false),
+                entDownloadsReadWrite: config.get<boolean>('entitlements.downloadsReadWrite', false),
+                entPicturesReadWrite: config.get<boolean>('entitlements.picturesReadWrite', false),
+                entMusicReadWrite: config.get<boolean>('entitlements.musicReadWrite', false),
+                entMoviesReadWrite: config.get<boolean>('entitlements.moviesReadWrite', false),
+                entHardenedRuntime: config.get<boolean>('entitlements.hardenedRuntime', false),
+                entAllowJit: config.get<boolean>('entitlements.allowJit', false),
+                entAllowUnsignedMemory: config.get<boolean>('entitlements.allowUnsignedMemory', false),
+                entAllowDyldEnv: config.get<boolean>('entitlements.allowDyldEnv', false),
+                entDisableLibraryValidation: config.get<boolean>('entitlements.disableLibraryValidation', false),
+                entCamera: config.get<boolean>('entitlements.camera', false),
+                entMicrophone: config.get<boolean>('entitlements.microphone', false),
+                entLocation: config.get<boolean>('entitlements.location', false),
+                entCalendars: config.get<boolean>('entitlements.calendars', false),
+                entContacts: config.get<boolean>('entitlements.contacts', false),
+                entPhotos: config.get<boolean>('entitlements.photos', false),
             },
         });
     }
@@ -130,6 +150,26 @@ export class MacOSPackageConfigProvider {
             await wsConfig.update('codeSign.notarize', config.notarize, vscode.ConfigurationTarget.Workspace);
             await wsConfig.update('codeSign.appleId', config.appleId, vscode.ConfigurationTarget.Workspace);
             await wsConfig.update('codeSign.teamId', config.teamId, vscode.ConfigurationTarget.Workspace);
+            // 保存权限配置
+            await wsConfig.update('entitlements.appSandbox', config.entAppSandbox, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.networkClient', config.entNetworkClient, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.networkServer', config.entNetworkServer, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.fileReadWrite', config.entFileReadWrite, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.downloadsReadWrite', config.entDownloadsReadWrite, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.picturesReadWrite', config.entPicturesReadWrite, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.musicReadWrite', config.entMusicReadWrite, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.moviesReadWrite', config.entMoviesReadWrite, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.hardenedRuntime', config.entHardenedRuntime, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.allowJit', config.entAllowJit, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.allowUnsignedMemory', config.entAllowUnsignedMemory, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.allowDyldEnv', config.entAllowDyldEnv, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.disableLibraryValidation', config.entDisableLibraryValidation, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.camera', config.entCamera, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.microphone', config.entMicrophone, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.location', config.entLocation, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.calendars', config.entCalendars, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.contacts', config.entContacts, vscode.ConfigurationTarget.Workspace);
+            await wsConfig.update('entitlements.photos', config.entPhotos, vscode.ConfigurationTarget.Workspace);
 
             vscode.window.showInformationMessage('✓ macOS 打包配置已保存');
             this._panel.webview.postMessage({ command: 'saved' });
@@ -307,6 +347,11 @@ export class MacOSPackageConfigProvider {
         .radio-row.selected {
             border-color: var(--vscode-focusBorder);
             background: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+        .radio-row.selected .radio-title,
+        .radio-row.selected .radio-desc {
+            color: var(--vscode-list-activeSelectionForeground);
         }
         .radio-row input[type="radio"] {
             width: 16px;
@@ -551,6 +596,99 @@ export class MacOSPackageConfigProvider {
             <input type="hidden" id="iconPath">
         </div>
 
+        <!-- 权限配置 -->
+        <div class="section">
+            <div class="section-title">🔒 应用权限 (Entitlements)</div>
+            <div class="form-hint" style="margin-bottom: 12px;">配置应用沙盒和系统权限，影响应用可访问的系统功能</div>
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="entAppSandbox">
+                <label class="checkbox-label" for="entAppSandbox">App Sandbox (应用沙盒)</label>
+            </div>
+            <div class="form-hint" style="margin-left: 24px; margin-bottom: 8px;">启用沙盒模式，限制应用访问系统资源（App Store 必需）</div>
+
+            <div id="sandboxOptions" class="hidden" style="margin-left: 24px; border-left: 2px solid var(--vscode-panel-border); padding-left: 12px;">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entNetworkClient">
+                    <label class="checkbox-label" for="entNetworkClient">网络客户端 (出站连接)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entNetworkServer">
+                    <label class="checkbox-label" for="entNetworkServer">网络服务器 (入站连接)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entFileReadWrite">
+                    <label class="checkbox-label" for="entFileReadWrite">用户选择的文件 (读写)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entDownloadsReadWrite">
+                    <label class="checkbox-label" for="entDownloadsReadWrite">Downloads 文件夹 (读写)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entPicturesReadWrite">
+                    <label class="checkbox-label" for="entPicturesReadWrite">Pictures 文件夹 (读写)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entMusicReadWrite">
+                    <label class="checkbox-label" for="entMusicReadWrite">Music 文件夹 (读写)</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entMoviesReadWrite">
+                    <label class="checkbox-label" for="entMoviesReadWrite">Movies 文件夹 (读写)</label>
+                </div>
+            </div>
+
+            <div class="checkbox-row" style="margin-top: 12px;">
+                <input type="checkbox" id="entHardenedRuntime">
+                <label class="checkbox-label" for="entHardenedRuntime">Hardened Runtime (强化运行时)</label>
+            </div>
+            <div class="form-hint" style="margin-left: 24px; margin-bottom: 8px;">启用更严格的安全保护（公证必需）</div>
+
+            <div id="hardenedOptions" class="hidden" style="margin-left: 24px; border-left: 2px solid var(--vscode-panel-border); padding-left: 12px;">
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entAllowJit">
+                    <label class="checkbox-label" for="entAllowJit">允许 JIT 编译</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entAllowUnsignedMemory">
+                    <label class="checkbox-label" for="entAllowUnsignedMemory">允许未签名的可执行内存</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entAllowDyldEnv">
+                    <label class="checkbox-label" for="entAllowDyldEnv">允许 DYLD 环境变量</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="entDisableLibraryValidation">
+                    <label class="checkbox-label" for="entDisableLibraryValidation">禁用库验证</label>
+                </div>
+            </div>
+
+            <div class="checkbox-row" style="margin-top: 12px;">
+                <input type="checkbox" id="entCamera">
+                <label class="checkbox-label" for="entCamera">摄像头访问</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="entMicrophone">
+                <label class="checkbox-label" for="entMicrophone">麦克风访问</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="entLocation">
+                <label class="checkbox-label" for="entLocation">位置服务</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="entCalendars">
+                <label class="checkbox-label" for="entCalendars">日历访问</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="entContacts">
+                <label class="checkbox-label" for="entContacts">通讯录访问</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="entPhotos">
+                <label class="checkbox-label" for="entPhotos">照片库访问</label>
+            </div>
+        </div>
+
         <!-- 代码签名 -->
         <div class="section">
             <div class="section-title">🔐 代码签名 (可选)</div>
@@ -632,12 +770,35 @@ export class MacOSPackageConfigProvider {
             document.getElementById('appleId').value = config.appleId || '';
             document.getElementById('teamId').value = config.teamId || '';
 
+            // 加载权限配置
+            document.getElementById('entAppSandbox').checked = config.entAppSandbox || false;
+            document.getElementById('entNetworkClient').checked = config.entNetworkClient || false;
+            document.getElementById('entNetworkServer').checked = config.entNetworkServer || false;
+            document.getElementById('entFileReadWrite').checked = config.entFileReadWrite || false;
+            document.getElementById('entDownloadsReadWrite').checked = config.entDownloadsReadWrite || false;
+            document.getElementById('entPicturesReadWrite').checked = config.entPicturesReadWrite || false;
+            document.getElementById('entMusicReadWrite').checked = config.entMusicReadWrite || false;
+            document.getElementById('entMoviesReadWrite').checked = config.entMoviesReadWrite || false;
+            document.getElementById('entHardenedRuntime').checked = config.entHardenedRuntime || false;
+            document.getElementById('entAllowJit').checked = config.entAllowJit || false;
+            document.getElementById('entAllowUnsignedMemory').checked = config.entAllowUnsignedMemory || false;
+            document.getElementById('entAllowDyldEnv').checked = config.entAllowDyldEnv || false;
+            document.getElementById('entDisableLibraryValidation').checked = config.entDisableLibraryValidation || false;
+            document.getElementById('entCamera').checked = config.entCamera || false;
+            document.getElementById('entMicrophone').checked = config.entMicrophone || false;
+            document.getElementById('entLocation').checked = config.entLocation || false;
+            document.getElementById('entCalendars').checked = config.entCalendars || false;
+            document.getElementById('entContacts').checked = config.entContacts || false;
+            document.getElementById('entPhotos').checked = config.entPhotos || false;
+
             // 设置打包格式
             selectFormat(config.format || 'app');
 
             // 更新 UI 状态
             toggleEnabled();
             toggleCodeSign();
+            toggleSandbox();
+            toggleHardenedRuntime();
 
             // 如果有图标路径
             if (config.iconPath) {
@@ -645,6 +806,19 @@ export class MacOSPackageConfigProvider {
                 document.getElementById('clearIconBtn').style.display = 'block';
             }
         }
+
+        function toggleSandbox() {
+            const enabled = document.getElementById('entAppSandbox').checked;
+            document.getElementById('sandboxOptions').classList.toggle('hidden', !enabled);
+        }
+
+        function toggleHardenedRuntime() {
+            const enabled = document.getElementById('entHardenedRuntime').checked;
+            document.getElementById('hardenedOptions').classList.toggle('hidden', !enabled);
+        }
+
+        document.getElementById('entAppSandbox').addEventListener('change', toggleSandbox);
+        document.getElementById('entHardenedRuntime').addEventListener('change', toggleHardenedRuntime);
 
         function toggleEnabled() {
             const enabled = document.getElementById('enabled').checked;
@@ -698,6 +872,26 @@ export class MacOSPackageConfigProvider {
                 notarize: document.getElementById('notarize').checked,
                 appleId: document.getElementById('appleId').value,
                 teamId: document.getElementById('teamId').value,
+                // 权限配置
+                entAppSandbox: document.getElementById('entAppSandbox').checked,
+                entNetworkClient: document.getElementById('entNetworkClient').checked,
+                entNetworkServer: document.getElementById('entNetworkServer').checked,
+                entFileReadWrite: document.getElementById('entFileReadWrite').checked,
+                entDownloadsReadWrite: document.getElementById('entDownloadsReadWrite').checked,
+                entPicturesReadWrite: document.getElementById('entPicturesReadWrite').checked,
+                entMusicReadWrite: document.getElementById('entMusicReadWrite').checked,
+                entMoviesReadWrite: document.getElementById('entMoviesReadWrite').checked,
+                entHardenedRuntime: document.getElementById('entHardenedRuntime').checked,
+                entAllowJit: document.getElementById('entAllowJit').checked,
+                entAllowUnsignedMemory: document.getElementById('entAllowUnsignedMemory').checked,
+                entAllowDyldEnv: document.getElementById('entAllowDyldEnv').checked,
+                entDisableLibraryValidation: document.getElementById('entDisableLibraryValidation').checked,
+                entCamera: document.getElementById('entCamera').checked,
+                entMicrophone: document.getElementById('entMicrophone').checked,
+                entLocation: document.getElementById('entLocation').checked,
+                entCalendars: document.getElementById('entCalendars').checked,
+                entContacts: document.getElementById('entContacts').checked,
+                entPhotos: document.getElementById('entPhotos').checked,
             };
             vscode.postMessage({ command: 'saveConfig', config: config });
         }

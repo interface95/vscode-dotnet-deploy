@@ -269,12 +269,29 @@ export async function createAppBundle(
         outputChannel.appendLine(`[macOS Packager] Copied executable`);
 
         // 复制依赖文件 (同目录下的其他文件)
+        // 排除列表：.app 目录、.dmg、.pkg 等打包产物
+        const excludePatterns = [
+            /\.app$/i,
+            /\.dmg$/i,
+            /\.pkg$/i,
+            /\.dSYM$/i,
+            /\.iconset$/i,
+        ];
+
         const sourceDir = path.dirname(options.executablePath);
         const sourceFiles = fs.readdirSync(sourceDir);
         for (const file of sourceFiles) {
+            // 跳过主可执行文件
             if (file === path.basename(options.executablePath)) {
-                continue; // 跳过主可执行文件，已经复制过了
+                continue;
             }
+
+            // 跳过排除的文件/目录
+            if (excludePatterns.some(pattern => pattern.test(file))) {
+                outputChannel.appendLine(`[macOS Packager] Skipping: ${file}`);
+                continue;
+            }
+
             const sourcePath = path.join(sourceDir, file);
             const stat = fs.statSync(sourcePath);
 
@@ -422,17 +439,30 @@ export async function packageForMacOS(
     }
 
     // 2. 根据格式创建 DMG 或 PKG
+    let finalResult: MacOSPackageResult;
+
     if (options.format === 'dmg') {
         const dmgPath = path.join(options.outputDir, `${options.appName}.dmg`);
-        return await createDmg(appResult.outputPath, dmgPath, options.appName, outputChannel);
-    }
-
-    if (options.format === 'pkg') {
+        finalResult = await createDmg(appResult.outputPath, dmgPath, options.appName, outputChannel);
+    } else if (options.format === 'pkg') {
         const pkgPath = path.join(options.outputDir, `${options.appName}.pkg`);
-        return await createPkg(appResult.outputPath, pkgPath, options.bundleId, options.version, outputChannel);
+        finalResult = await createPkg(appResult.outputPath, pkgPath, options.bundleId, options.version, outputChannel);
+    } else {
+        return appResult;
     }
 
-    return appResult;
+    // 3. 如果最终打包成功，删除临时的 .app 目录
+    if (finalResult.success) {
+        try {
+            fs.rmSync(appResult.outputPath, { recursive: true, force: true });
+            outputChannel.appendLine(`[macOS Packager] Cleaned up temporary .app bundle`);
+        } catch (err: any) {
+            outputChannel.appendLine(`[macOS Packager] ⚠️ Failed to clean up .app: ${err.message}`);
+            // 不影响最终结果
+        }
+    }
+
+    return finalResult;
 }
 
 /**
