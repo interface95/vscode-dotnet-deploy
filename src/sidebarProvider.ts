@@ -83,6 +83,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 case 'openCrossCompileDocs':
                     vscode.commands.executeCommand('dotnetDeploy.openCrossCompileDocs');
                     break;
+                case 'openMacOSPackageConfig':
+                    vscode.commands.executeCommand('dotnetDeploy.openMacOSPackageConfig');
+                    break;
             }
         });
 
@@ -145,13 +148,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             this._projects = projects;
             const config = vscode.workspace.getConfiguration('dotnetDeploy');
 
-            // 检测交叉编译工具链状态
-            this._toolchainStatus = await detectToolchain();
-            const toolchainSummary = getToolchainSummary(this._toolchainStatus);
+            // 检测是否为 macOS 平台
+            const isMacOS = process.platform === 'darwin';
 
+            // 先发送项目列表（不等待工具链检测）
             this._postMessage({
                 command: 'projects',
                 projects: this._projects.map(p => ({ name: p.name, path: p.path })),
+                isMacOS: isMacOS,
                 config: {
                     host: config.get('server.host', ''),
                     port: config.get('server.port', 22),
@@ -167,6 +171,26 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     runtime: config.get<string>('publish.runtime') || 'linux-x64',
                     crossCompileEnabled: config.get('crossCompile.enabled', true)
                 },
+                toolchain: null  // 工具链稍后异步加载
+            });
+
+            // 异步加载工具链状态（不阻塞 UI）
+            this._loadToolchainAsync();
+        } catch (err: any) {
+            this._postMessage({ command: 'projects', projects: [], error: err.message });
+        }
+    }
+
+    /**
+     * 异步加载工具链状态
+     */
+    private async _loadToolchainAsync() {
+        try {
+            this._toolchainStatus = await detectToolchain();
+            const toolchainSummary = getToolchainSummary(this._toolchainStatus);
+
+            this._postMessage({
+                command: 'toolchainStatus',
                 toolchain: {
                     linuxReady: toolchainSummary.linuxReady,
                     windowsReady: toolchainSummary.windowsReady,
@@ -180,7 +204,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 }
             });
         } catch (err: any) {
-            this._postMessage({ command: 'projects', projects: [], error: err.message });
+            console.error('Failed to detect toolchain:', err);
         }
     }
 
@@ -495,6 +519,7 @@ vscode-dropdown::part(control) { width: 100%; }
 <div class="header">
     <h2>🚀 Dotnet Deploy</h2>
     <div style="display:flex; gap:4px;">
+        <vscode-button appearance="icon" id="macosPackageBtn" title="macOS 打包" style="display:none;">📦</vscode-button>
         <vscode-button appearance="icon" id="dashboardBtn" title="高级设置">⚙️</vscode-button>
         <vscode-button appearance="icon" id="refreshBtn" title="刷新项目">↻</vscode-button>
     </div>
@@ -523,14 +548,27 @@ vscode-dropdown::part(control) { width: 100%; }
         vscode.postMessage({ command: 'openDashboard' });
     });
 
+    document.getElementById('macosPackageBtn').addEventListener('click', () => {
+        vscode.postMessage({ command: 'openMacOSPackageConfig' });
+    });
+
     // Store toolchain status globally
     let toolchainData = null;
+    let isMacOSPlatform = false;
 
     window.addEventListener('message', e => {
         const m = e.data;
         if (m.command === 'projects') {
             const mergedConfig = { ...m.config, ...state };
             toolchainData = m.toolchain;
+            isMacOSPlatform = m.isMacOS || false;
+
+            // Show/hide macOS package button based on platform
+            const macosBtn = document.getElementById('macosPackageBtn');
+            if (macosBtn) {
+                macosBtn.style.display = isMacOSPlatform ? 'inline-flex' : 'none';
+            }
+
             renderForm(m.projects, mergedConfig, m.error, m.toolchain);
         } else if (m.command === 'toolchainStatus') {
             toolchainData = m.toolchain;
